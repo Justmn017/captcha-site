@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "routes": [
+    { "handle": "filesystem" },
+    { "src": "/", "dest": "/hcaptcha.html" },
+    { "src": "/(.*)", "dest": "/hcaptcha.html" }
+  ],
+  "buildCommand": "echo 'Static site deployment - no build needed'",
+  "outputDirectory": ".",
+  "public": true
+} 
