@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Проверка hCaptcha</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://js.hcaptcha.com/1/api.js" async defer></script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -73,7 +74,7 @@
         <h1>Проверка hCaptcha</h1>
         <p>Пожалуйста, пройдите проверку hCaptcha для продолжения.</p>
         
-        <div id="captcha-container"></div>
+        <div id="h-captcha-container"></div>
         
         <div id="error-message" class="error" style="display: none;">
             hCaptcha has failed to initialize. Please see the developer tools console for more information.
@@ -82,7 +83,6 @@
         <button id="verify-button" disabled>Подтвердить</button>
     </div>
 
-    <script src="https://js.hcaptcha.com/1/api.js" async defer></script>
     <script>
         const tg = window.Telegram.WebApp;
         tg.expand();
@@ -92,54 +92,61 @@
         const siteKey = urlParams.get('site_key');
         const userId = urlParams.get('user_id');
         
+        console.log("Site key:", siteKey);
+        console.log("User ID:", userId);
+        
         // Установка кнопки
         const verifyButton = document.getElementById('verify-button');
         let hcaptchaToken = null;
         
         // Функция, которая будет вызвана после успешного прохождения hCaptcha
-        window.onCaptchaSuccess = function(token) {
+        function onCaptchaSuccess(token) {
+            console.log("Captcha success, token:", token ? token.substring(0, 10) + '...' : 'null');
             hcaptchaToken = token;
             verifyButton.disabled = false;
-        };
-        
-        // Функция для отображения ошибки
-        function showError() {
-            document.getElementById('error-message').style.display = 'block';
         }
         
-        // Загрузка и инициализация hCaptcha
-        document.addEventListener('DOMContentLoaded', function() {
-            if (!siteKey) {
-                showError();
-                return;
-            }
-            
+        // Функция для отображения ошибки
+        function showError(message) {
+            const errorElement = document.getElementById('error-message');
+            errorElement.textContent = message || 'hCaptcha has failed to initialize. Please see the developer tools console for more information.';
+            errorElement.style.display = 'block';
+        }
+        
+        // Проверяем наличие site_key
+        if (!siteKey) {
+            showError('Ошибка: не указан site_key в параметрах URL');
+        } else {
+            // Создаем div для hCaptcha
             try {
-                // Создаем div для hCaptcha
                 const captchaDiv = document.createElement('div');
                 captchaDiv.className = 'h-captcha';
                 captchaDiv.setAttribute('data-sitekey', siteKey);
                 captchaDiv.setAttribute('data-callback', 'onCaptchaSuccess');
-                document.getElementById('captcha-container').appendChild(captchaDiv);
+                document.getElementById('h-captcha-container').appendChild(captchaDiv);
                 
-                // Перезагружаем hCaptcha после добавления элемента
-                if (window.hcaptcha) {
-                    window.hcaptcha.render(captchaDiv, {
-                        sitekey: siteKey,
-                        callback: onCaptchaSuccess
-                    });
-                }
+                // Глобальная функция для обратного вызова
+                window.onCaptchaSuccess = onCaptchaSuccess;
+                
+                // Проверим, загрузился ли hCaptcha через 2 секунды
+                setTimeout(function() {
+                    if (!window.hcaptcha) {
+                        console.error('hCaptcha не был загружен');
+                        showError('hCaptcha не загружена. Проверьте подключение к интернету или попробуйте другой браузер.');
+                    }
+                }, 2000);
             } catch (error) {
                 console.error('hCaptcha initialization error:', error);
-                showError();
+                showError('Ошибка инициализации hCaptcha: ' + error.message);
             }
-        });
+        }
         
         // Обработчик нажатия кнопки
         verifyButton.addEventListener('click', function() {
             if (hcaptchaToken) {
                 // Отправляем данные обратно в Telegram
                 const callbackData = `captcha_verified:${userId}:${hcaptchaToken}`;
+                console.log("Sending data to Telegram:", callbackData.substring(0, 20) + '...');
                 tg.sendData(callbackData);
                 
                 // Отключаем кнопку и показываем текст
@@ -154,4 +161,4 @@
         });
     </script>
 </body>
-</html> 
+</html>

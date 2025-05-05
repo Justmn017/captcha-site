@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Страница проверки hCaptcha</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        
+        .container {
+            background-color: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 500px;
+            text-align: center;
+        }
+        
+        h1 {
+            margin-top: 0;
+            font-size: 24px;
+            color: #333;
+        }
+        
+        p {
+            margin-bottom: 20px;
+            font-size: 16px;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Сервер проверки hCaptcha</h1>
+        <p>Эта страница используется для проверки hCaptcha в Telegram боте.</p>
+        <p>Если вы видите эту страницу, значит сервер работает правильно.</p>
+    </div>
+    <script>
+        // Проверяем наличие параметров в URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const siteKey = urlParams.get('site_key');
+        const userId = urlParams.get('user_id');
+        
+        // Если параметры указаны, перенаправляем на hcaptcha.html
+        if (siteKey && userId) {
+            window.location.href = `/hcaptcha.html?site_key=${siteKey}&user_id=${userId}`;
+        }
+    </script>
+</body>
+</html> 
