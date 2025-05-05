@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>hCaptcha Verification</title>
-    <script src="https://js.hcaptcha.com/1/api.js" async defer></script>
+    <title>Проверка hCaptcha</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         body {
@@ -59,24 +58,13 @@
             cursor: not-allowed;
         }
         
-        .h-captcha {
-            display: inline-block;
-            margin: 10px 0;
-        }
-        
         .error {
             color: red;
-            margin: 10px 0;
-        }
-        
-        .success {
-            color: green;
-            margin: 10px 0;
-        }
-        
-        .loading {
-            display: none;
-            margin-top: 10px;
+            padding: 10px;
+            background-color: #ffeeee;
+            border-radius: 4px;
+            margin: 20px 0;
+            border: 1px solid #ffcccc;
         }
     </style>
 </head>
@@ -85,66 +73,85 @@
         <h1>Проверка hCaptcha</h1>
         <p>Пожалуйста, пройдите проверку hCaptcha для продолжения.</p>
         
-        <div class="h-captcha" id="captcha"></div>
+        <div id="captcha-container"></div>
         
-        <div id="error" class="error"></div>
-        <div id="success" class="success"></div>
+        <div id="error-message" class="error" style="display: none;">
+            hCaptcha has failed to initialize. Please see the developer tools console for more information.
+        </div>
         
-        <button id="submit" disabled>Подтвердить</button>
-        <div id="loading" class="loading">Проверка...</div>
+        <button id="verify-button" disabled>Подтвердить</button>
     </div>
-    
+
+    <script src="https://js.hcaptcha.com/1/api.js" async defer></script>
     <script>
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+        
         // Получаем параметры из URL
         const urlParams = new URLSearchParams(window.location.search);
         const siteKey = urlParams.get('site_key');
         const userId = urlParams.get('user_id');
         
-        // Telegram Web App
-        const tg = window.Telegram.WebApp;
-        tg.expand();
+        // Установка кнопки
+        const verifyButton = document.getElementById('verify-button');
+        let hcaptchaToken = null;
         
-        // Устанавливаем hCaptcha динамически
-        document.getElementById('captcha').innerHTML = `<div class="h-captcha" data-sitekey="${siteKey}" data-callback="enableSubmit"></div>`;
+        // Функция, которая будет вызвана после успешного прохождения hCaptcha
+        window.onCaptchaSuccess = function(token) {
+            hcaptchaToken = token;
+            verifyButton.disabled = false;
+        };
         
-        // Функция для включения кнопки подтверждения
-        function enableSubmit(token) {
-            document.getElementById('submit').disabled = false;
-            window.hcaptchaToken = token;
+        // Функция для отображения ошибки
+        function showError() {
+            document.getElementById('error-message').style.display = 'block';
         }
         
-        // Обработчик нажатия кнопки
-        document.getElementById('submit').addEventListener('click', function() {
-            // Показываем загрузку
-            document.getElementById('loading').style.display = 'block';
-            document.getElementById('error').textContent = '';
-            document.getElementById('success').textContent = '';
+        // Загрузка и инициализация hCaptcha
+        document.addEventListener('DOMContentLoaded', function() {
+            if (!siteKey) {
+                showError();
+                return;
+            }
             
-            // Отправляем данные в Telegram бот
-            tg.sendData(JSON.stringify({
-                action: 'captcha_verified',
-                user_id: userId,
-                token: window.hcaptchaToken
-            }));
-            
-            // Показываем сообщение об успехе
-            document.getElementById('loading').style.display = 'none';
-            document.getElementById('success').textContent = 'Проверка пройдена! Возвращаемся в чат...';
-            
-            // Закрываем Web App после небольшой задержки
-            setTimeout(() => {
-                tg.close();
-            }, 1500);
+            try {
+                // Создаем div для hCaptcha
+                const captchaDiv = document.createElement('div');
+                captchaDiv.className = 'h-captcha';
+                captchaDiv.setAttribute('data-sitekey', siteKey);
+                captchaDiv.setAttribute('data-callback', 'onCaptchaSuccess');
+                document.getElementById('captcha-container').appendChild(captchaDiv);
+                
+                // Перезагружаем hCaptcha после добавления элемента
+                if (window.hcaptcha) {
+                    window.hcaptcha.render(captchaDiv, {
+                        sitekey: siteKey,
+                        callback: onCaptchaSuccess
+                    });
+                }
+            } catch (error) {
+                console.error('hCaptcha initialization error:', error);
+                showError();
+            }
         });
         
-        // Инициализируем hCaptcha
-        function onloadCallback() {
-            hcaptcha.render('captcha', {
-                'sitekey': siteKey,
-                'callback': enableSubmit
-            });
-        }
+        // Обработчик нажатия кнопки
+        verifyButton.addEventListener('click', function() {
+            if (hcaptchaToken) {
+                // Отправляем данные обратно в Telegram
+                const callbackData = `captcha_verified:${userId}:${hcaptchaToken}`;
+                tg.sendData(callbackData);
+                
+                // Отключаем кнопку и показываем текст
+                verifyButton.disabled = true;
+                verifyButton.textContent = 'Проверка пройдена!';
+                
+                // Закрываем WebApp через 1.5 секунды
+                setTimeout(() => {
+                    tg.close();
+                }, 1500);
+            }
+        });
     </script>
-    <script src="https://js.hcaptcha.com/1/api.js?onload=onloadCallback&render=explicit" async defer></script>
 </body>
-</html>
+</html> 
