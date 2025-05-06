@@ -67,12 +67,41 @@
             margin: 20px 0;
             border: 1px solid #ffcccc;
         }
+
+        #loading {
+            display: none;
+            margin-top: 20px;
+        }
+
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border-left-color: #0088cc;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .success {
+            color: green;
+            padding: 10px;
+            background-color: #eeffee;
+            border-radius: 4px;
+            margin: 20px 0;
+            border: 1px solid #ccffcc;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>Проверка hCaptcha</h1>
-        <p>Пожалуйста, пройдите проверку hCaptcha для продолжения.</p>
+        <p>Пожалуйста, пройдите проверку для продолжения.</p>
         
         <div id="h-captcha-container"></div>
         
@@ -81,6 +110,16 @@
         </div>
         
         <button id="verify-button" disabled>Подтвердить</button>
+
+        <div id="loading" style="display: none;">
+            <div class="spinner"></div>
+            <p>Проверка данных...</p>
+        </div>
+        
+        <div id="success-message" class="success" style="display: none;">
+            ✅ Проверка пройдена успешно! 
+            <p>Вы можете вернуться в Telegram.</p>
+        </div>
     </div>
 
     <script>
@@ -91,13 +130,52 @@
         const urlParams = new URLSearchParams(window.location.search);
         const siteKey = urlParams.get('site_key');
         const userId = urlParams.get('user_id');
+        const botUsername = urlParams.get('bot_username') || "your_bot"; // Получаем имя бота из URL или используем значение по умолчанию
         
         console.log("Site key:", siteKey);
         console.log("User ID:", userId);
+        console.log("Bot username:", botUsername);
         
         // Установка кнопки
         const verifyButton = document.getElementById('verify-button');
+        const loadingElement = document.getElementById('loading');
+        const successElement = document.getElementById('success-message');
         let hcaptchaToken = null;
+        
+        // Функция для отправки запроса на сервер для проверки капчи
+        async function sendVerificationToBot(token) {
+            try {
+                // Отправляем уведомление в открытый бот с использованием метода sendData
+                const captchaData = JSON.stringify({
+                    action: 'captcha_verified',
+                    user_id: userId,
+                    token: token,
+                    timestamp: Date.now()
+                });
+                
+                // Отправляем данные в Telegram
+                tg.sendData(captchaData);
+                
+                // Также можно попробовать открыть ссылку, которая содержит команду для бота
+                // Этот метод помогает в случаях, когда sendData не работает
+                const deepLink = `https://t.me/${botUsername}?start=captcha_${userId}_${Date.now()}`;
+                console.log("Creating deep link:", deepLink);
+                
+                // Создаём элемент <a> для открытия deep link
+                const linkElement = document.createElement('a');
+                linkElement.href = deepLink;
+                linkElement.id = 'telegram-deep-link';
+                linkElement.style.display = 'none';
+                linkElement.textContent = 'Вернуться в Telegram';
+                linkElement.target = '_blank';
+                document.body.appendChild(linkElement);
+                
+                return true;
+            } catch (error) {
+                console.error('Error sending verification to bot:', error);
+                return false;
+            }
+        }
         
         // Функция, которая будет вызвана после успешного прохождения hCaptcha
         function onCaptchaSuccess(token) {
@@ -142,21 +220,69 @@
         }
         
         // Обработчик нажатия кнопки
-        verifyButton.addEventListener('click', function() {
+        verifyButton.addEventListener('click', async function() {
             if (hcaptchaToken) {
-                // Отправляем данные обратно в Telegram
-                const callbackData = `captcha_verified:${userId}:${hcaptchaToken}`;
-                console.log("Sending data to Telegram:", callbackData.substring(0, 20) + '...');
-                tg.sendData(callbackData);
-                
-                // Отключаем кнопку и показываем текст
+                // Отключаем кнопку и показываем индикатор загрузки
                 verifyButton.disabled = true;
-                verifyButton.textContent = 'Проверка пройдена!';
+                verifyButton.style.display = 'none';
+                loadingElement.style.display = 'block';
                 
-                // Закрываем WebApp через 1.5 секунды
-                setTimeout(() => {
-                    tg.close();
-                }, 1500);
+                try {
+                    // Отправляем данные на бот
+                    const success = await sendVerificationToBot(hcaptchaToken);
+                    
+                    if (success) {
+                        // Показываем сообщение об успехе и ссылку возврата
+                        loadingElement.style.display = 'none';
+                        successElement.style.display = 'block';
+                        
+                        // Добавляем ссылку для возврата в Telegram
+                        const linkElement = document.getElementById('telegram-deep-link');
+                        if (linkElement) {
+                            linkElement.style.display = 'block';
+                            linkElement.className = 'button';
+                            successElement.appendChild(linkElement);
+                        }
+                        
+                        // Закрываем WebApp через несколько секунд
+                        setTimeout(() => {
+                            tg.close();
+                        }, 3000);
+                    } else {
+                        // Показываем ошибку
+                        loadingElement.innerHTML = '<p style="color: red;">❌ Ошибка при отправке данных. Попробуйте еще раз.</p>';
+                        verifyButton.disabled = false;
+                        verifyButton.style.display = 'block';
+                    }
+                } catch (error) {
+                    console.error('Error sending data to Telegram:', error);
+                    loadingElement.innerHTML = '<p style="color: red;">❌ Ошибка при отправке данных. Попробуйте еще раз.</p>';
+                    verifyButton.disabled = false;
+                    verifyButton.style.display = 'block';
+                }
+            }
+        });
+        
+        // Обработчик событий Telegram WebApp
+        window.addEventListener('message', function(event) {
+            if (event.data && event.data.eventType === 'web_app_data_send_error') {
+                console.error('Telegram WebApp data send error:', event.data);
+                loadingElement.innerHTML = '<p style="color: red;">❌ Ошибка при отправке данных в Telegram. Попробуйте еще раз.</p>';
+                verifyButton.disabled = false;
+                verifyButton.style.display = 'block';
+                loadingElement.style.display = 'none';
+                
+                // Создаем ссылку для возврата в Telegram с подтверждением капчи
+                const linkElement = document.getElementById('telegram-deep-link');
+                if (linkElement) {
+                    linkElement.textContent = 'Вернуться в Telegram и подтвердить';
+                    linkElement.style.display = 'block';
+                    linkElement.style.marginTop = '20px';
+                    linkElement.style.color = '#0088cc';
+                    linkElement.style.textDecoration = 'underline';
+                    linkElement.style.cursor = 'pointer';
+                    document.body.appendChild(linkElement);
+                }
             }
         });
     </script>
